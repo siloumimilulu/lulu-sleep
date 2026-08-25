@@ -100,15 +100,14 @@
   .chart-head b{ font-family:'Gaegu'; font-size:1.3em; }
   .chart-head span{ font-size:.68em; color:var(--fog); }
 
-  #vitalSvg{ width:100%; height:70px; display:block; margin:6px 0 10px; overflow:visible; }
-  #vitalPath{
-    fill:none;
-    stroke:#7fd4c9;
-    stroke-width:2.4;
-    stroke-linecap:round;
-    stroke-linejoin:round;
-    vector-effect:non-scaling-stroke;
-    filter:drop-shadow(0 0 4px rgba(127,212,201,.75));
+  /* OBS 호환성을 위해 Canvas/SVG 대신 일반 HTML 선분으로 생체 파형을 그립니다. */
+  #vitalDom{
+    width:100%; height:70px; display:block; position:relative; margin:6px 0 10px; overflow:hidden;
+  }
+  .vital-seg{
+    position:absolute; height:2.6px; background:#7fd4c9; border-radius:999px;
+    transform-origin:0 50%; pointer-events:none;
+    box-shadow:0 0 7px rgba(127,212,201,.8);
   }
 
   .gauge-row{ display:flex; align-items:center; gap:14px; }
@@ -355,7 +354,7 @@
   <button class="chroma-toggle" id="chromaBtn" type="button">🎥 OBS에서는 투명 배경이 자동 적용돼요</button>
   <div class="chart-frame">
     <div class="chart-head"><b>🐳 루루 수면 차트</b><span id="ovStageTime">VITAL · SLEEP INDEX</span></div>
-    <svg id="vitalSvg" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><path id="vitalPath" d="M0 50 L1000 50"></path></svg>
+    <div id="vitalDom" aria-hidden="true"></div>
     <div class="gauge-row">
       <div class="stageface" id="stageFace">😀</div>
       <div class="gauge-wrap" style="position:relative;">
@@ -839,30 +838,54 @@ import {
   });
 
   /* ================= VISUALS ================= */
-  // OBS Browser Source에서 투명 Canvas가 누락되는 경우가 있어 SVG 경로로 그립니다.
-  // SVG는 CEF/OBS의 알파 배경에서도 안정적으로 렌더링됩니다.
-  const vitalPath = document.getElementById("vitalPath");
+  // OBS Browser Source에서 Canvas/SVG가 누락되는 환경을 피하기 위해
+  // 일반 HTML div 선분들로 파형을 그립니다.
+  const vitalDom = document.getElementById("vitalDom");
   let vitalPhase = 0;
   let lastGauge = 0;
+  const vitalSegments = [];
+
+  for(let i=0; i<84; i++){
+    const seg = document.createElement("span");
+    seg.className = "vital-seg";
+    vitalDom.appendChild(seg);
+    vitalSegments.push(seg);
+  }
 
   function drawVital(gauge){
-    const w = 1000, h = 100;
-    const amp = (1 - gauge/100) * 32 + 6;
+    const rect = vitalDom.getBoundingClientRect();
+    const w = rect.width || 700;
+    const h = rect.height || 70;
+    const amp = (1 - gauge/100) * (h * 0.32) + h * 0.06;
     const freq = (1 - gauge/100) * 0.055 + 0.012;
     const pts = [];
-    for(let x=0; x<=w; x+=4){
+
+    for(let i=0; i<=vitalSegments.length; i++){
+      const x = (i / vitalSegments.length) * w;
+      const virtualX = (i / vitalSegments.length) * 1000;
       const y = h/2
-        + Math.sin(x*freq + vitalPhase) * amp * Math.pow(Math.sin(x*0.01 + vitalPhase*0.3), 2)
-        + Math.sin(x*freq*2.7 + vitalPhase*1.4) * amp * 0.15;
-      pts.push((x===0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1));
+        + Math.sin(virtualX*freq + vitalPhase) * amp * Math.pow(Math.sin(virtualX*0.01 + vitalPhase*0.3), 2)
+        + Math.sin(virtualX*freq*2.7 + vitalPhase*1.4) * amp * 0.15;
+      pts.push({x,y});
     }
-    vitalPath.setAttribute("d", pts.join(" "));
+
+    vitalSegments.forEach((seg, i) => {
+      const a = pts[i], b = pts[i+1];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.sqrt(dx*dx + dy*dy);
+      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      seg.style.left = a.x + "px";
+      seg.style.top = a.y + "px";
+      seg.style.width = Math.max(2, len + 1) + "px";
+      seg.style.transform = "rotate(" + angle + "deg)";
+    });
+
     vitalPhase += 0.08 + (gauge/100)*0.02;
   }
 
-  // setInterval을 사용해 OBS가 requestAnimationFrame을 절전/스로틀해도 계속 움직이게 합니다.
   drawVital(lastGauge);
   setInterval(() => drawVital(lastGauge), 50);
+  window.addEventListener("resize", () => drawVital(lastGauge));
 
   (function starsInit(){
     const c = document.getElementById("stars");
@@ -1412,4 +1435,4 @@ import {
 })();
 </script>
 </body>
-</html>    
+</html>
