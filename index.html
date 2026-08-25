@@ -559,6 +559,11 @@ import {
   let listenersAttached = false;
   let initialDataEnsured = false;
 
+  // 렌더 함수가 초기 setRole()에서 바로 참조하므로 먼저 초기화합니다.
+  let lastGauge = 0;
+  let lastResultSeenAt = 0;
+  let lastComboSeenAt = 0;
+
   const STAGES = [
     {max:25, face:"😀", name:"평소 루루 · 아직 정신이 또렷해요"},
     {max:50, face:"🙂", name:"조금 졸린 루루 · 말이 살짝 느려져요"},
@@ -842,7 +847,6 @@ import {
   // 일반 HTML div 선분들로 파형을 그립니다.
   const vitalDom = document.getElementById("vitalDom");
   let vitalPhase = 0;
-  let lastGauge = 0;
   const vitalSegments = [];
 
   for(let i=0; i<84; i++){
@@ -916,9 +920,6 @@ import {
     for(let i=0;i<STAGES.length;i++) if(g <= STAGES[i].max) return STAGES[i];
     return STAGES[STAGES.length-1];
   }
-
-  let lastResultSeenAt = 0;
-  let lastComboSeenAt = 0;
 
   function popFloat(container, text){
     const el = document.createElement("div");
