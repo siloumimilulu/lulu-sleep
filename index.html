@@ -37,8 +37,14 @@
   .mono{ font-family:'Space Mono', monospace; letter-spacing:.5px; }
 
   #stars{position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.7;}
-  body.chroma{ background: var(--chroma) !important; }
-  body.chroma #stars{ display:none; }
+
+  /* OBS 오버레이는 크로마키 대신 브라우저 알파(투명 배경)를 사용합니다. */
+  body.overlay-transparent{ background:transparent !important; }
+  body.overlay-transparent #stars{ display:none; }
+  body.overlay-transparent #overlayView{ background:transparent !important; }
+  body.overlay-transparent .backbtn,
+  body.overlay-transparent .conn,
+  body.overlay-transparent .chroma-toggle{ display:none !important; }
 
   #roleSelect{
     position:fixed; inset:0; z-index:50; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;
@@ -337,7 +343,7 @@
 
 <!-- OVERLAY VIEW -->
 <div class="view" id="overlayView">
-  <button class="chroma-toggle" id="chromaBtn">🟩 배경을 크로마키로 전환</button>
+  <button class="chroma-toggle" id="chromaBtn" type="button">🎥 OBS에서는 투명 배경이 자동 적용돼요</button>
   <div class="chart-frame">
     <div class="chart-head"><b>🐳 루루 수면 차트</b><span id="ovStageTime">VITAL · SLEEP INDEX</span></div>
     <canvas id="vitalCanvas"></canvas>
@@ -500,6 +506,7 @@ import {
   const requestedRole = ["voter","overlay","host"].includes(params.get("role")) ? params.get("role") : "voter";
   const ROOM_ID = sanitizeRoom(params.get("room") || "main");
   const ROOT = "rooms/" + ROOM_ID;
+  const OVERLAY_PREVIEW = params.get("preview") === "1";
 
   function sanitizeRoom(v){
     const s = String(v || "main").trim().replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 40);
@@ -702,6 +709,11 @@ import {
     if(r === "overlay") document.getElementById("overlayView").classList.add("active");
     if(r === "voter") document.getElementById("voterView").classList.add("active");
     if(r === "host") document.getElementById("hostView").classList.add("active");
+
+    // OBS 오버레이는 기본적으로 완전 투명 배경. 브라우저에서 확인할 때만 ?preview=1 사용.
+    document.body.classList.toggle("overlay-transparent", r === "overlay" && !OVERLAY_PREVIEW);
+    if(r === "host") document.getElementById("endBanner").classList.remove("show");
+
     if(writeUrl) updateRoleUrl(r);
 
     if(r === "host"){
@@ -809,11 +821,12 @@ import {
 
   setRole(requestedRole, false);
 
-  /* ================= CHROMA ================= */
+  /* ================= OVERLAY BACKGROUND ================= */
   document.getElementById("chromaBtn").addEventListener("click", function(){
-    document.body.classList.toggle("chroma");
-    const on = document.body.classList.contains("chroma");
-    this.textContent = on ? "🌌 배경을 기본 디자인으로 전환" : "🟩 배경을 크로마키로 전환";
+    const u = new URL(location.href);
+    if(OVERLAY_PREVIEW) u.searchParams.delete("preview");
+    else u.searchParams.set("preview", "1");
+    location.href = u.toString();
   });
 
   /* ================= VISUALS ================= */
@@ -1066,8 +1079,14 @@ import {
 
   /* ================= VOTER ================= */
   function renderVoter(s, actMap){
-    document.getElementById("voGaugeNum").textContent = clamp(s.gauge)+"%";
-    document.getElementById("voGaugeFill").style.width = clamp(s.gauge)+"%";
+    const g = clamp(s.gauge);
+    document.getElementById("voGaugeNum").textContent = g+"%";
+    document.getElementById("voGaugeFill").style.width = g+"%";
+
+    // 시청자 화면에서도 100% 달성 시 수면 완료 연출을 보여줍니다.
+    const endBanner = document.getElementById("endBanner");
+    if(g >= 100) endBanner.classList.add("show");
+    else endBanner.classList.remove("show");
 
     const cd = document.getElementById("voCountdown");
     const body = document.getElementById("voterBody");
