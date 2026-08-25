@@ -100,7 +100,16 @@
   .chart-head b{ font-family:'Gaegu'; font-size:1.3em; }
   .chart-head span{ font-size:.68em; color:var(--fog); }
 
-  #vitalCanvas{ width:100%; height:70px; display:block; margin:6px 0 10px; }
+  #vitalSvg{ width:100%; height:70px; display:block; margin:6px 0 10px; overflow:visible; }
+  #vitalPath{
+    fill:none;
+    stroke:#7fd4c9;
+    stroke-width:2.4;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+    vector-effect:non-scaling-stroke;
+    filter:drop-shadow(0 0 4px rgba(127,212,201,.75));
+  }
 
   .gauge-row{ display:flex; align-items:center; gap:14px; }
   .stageface{ font-size:2.6em; line-height:1; flex-shrink:0; filter: drop-shadow(0 0 12px rgba(127,212,201,.35)); }
@@ -346,7 +355,7 @@
   <button class="chroma-toggle" id="chromaBtn" type="button">🎥 OBS에서는 투명 배경이 자동 적용돼요</button>
   <div class="chart-frame">
     <div class="chart-head"><b>🐳 루루 수면 차트</b><span id="ovStageTime">VITAL · SLEEP INDEX</span></div>
-    <canvas id="vitalCanvas"></canvas>
+    <svg id="vitalSvg" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><path id="vitalPath" d="M0 50 L1000 50"></path></svg>
     <div class="gauge-row">
       <div class="stageface" id="stageFace">😀</div>
       <div class="gauge-wrap" style="position:relative;">
@@ -830,42 +839,30 @@ import {
   });
 
   /* ================= VISUALS ================= */
-  const canvas = document.getElementById("vitalCanvas");
-  const ctx = canvas.getContext("2d");
+  // OBS Browser Source에서 투명 Canvas가 누락되는 경우가 있어 SVG 경로로 그립니다.
+  // SVG는 CEF/OBS의 알파 배경에서도 안정적으로 렌더링됩니다.
+  const vitalPath = document.getElementById("vitalPath");
   let vitalPhase = 0;
   let lastGauge = 0;
 
-  function resizeCanvas(){
-    canvas.width = canvas.clientWidth * devicePixelRatio;
-    canvas.height = canvas.clientHeight * devicePixelRatio;
-  }
-
   function drawVital(gauge){
-    if(!canvas.clientWidth) return;
-    resizeCanvas();
-    const w = canvas.width, h = canvas.height;
-    ctx.clearRect(0,0,w,h);
-    ctx.beginPath();
-    const amp = (1 - gauge/100) * (h*0.32) + h*0.06;
+    const w = 1000, h = 100;
+    const amp = (1 - gauge/100) * 32 + 6;
     const freq = (1 - gauge/100) * 0.055 + 0.012;
-    ctx.lineWidth = 2 * devicePixelRatio;
-    ctx.strokeStyle = "#7fd4c9";
-    ctx.shadowColor = "rgba(127,212,201,.6)";
-    ctx.shadowBlur = 8;
-    for(let x=0; x<w; x++){
-      const y = h/2 + Math.sin(x*freq + vitalPhase) * amp * Math.pow(Math.sin(x*0.01+vitalPhase*0.3),2)
-                + Math.sin(x*freq*2.7 + vitalPhase*1.4) * amp * 0.15;
-      if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    const pts = [];
+    for(let x=0; x<=w; x+=4){
+      const y = h/2
+        + Math.sin(x*freq + vitalPhase) * amp * Math.pow(Math.sin(x*0.01 + vitalPhase*0.3), 2)
+        + Math.sin(x*freq*2.7 + vitalPhase*1.4) * amp * 0.15;
+      pts.push((x===0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1));
     }
-    ctx.stroke();
-    vitalPhase += 0.045 + (gauge/100)*0.01;
+    vitalPath.setAttribute("d", pts.join(" "));
+    vitalPhase += 0.08 + (gauge/100)*0.02;
   }
 
-  function vitalLoop(){
-    drawVital(lastGauge);
-    requestAnimationFrame(vitalLoop);
-  }
-  requestAnimationFrame(vitalLoop);
+  // setInterval을 사용해 OBS가 requestAnimationFrame을 절전/스로틀해도 계속 움직이게 합니다.
+  drawVital(lastGauge);
+  setInterval(() => drawVital(lastGauge), 50);
 
   (function starsInit(){
     const c = document.getElementById("stars");
@@ -1415,4 +1412,4 @@ import {
 })();
 </script>
 </body>
-</html>
+</html>    
